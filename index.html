@@ -146,12 +146,72 @@
   }
   #confession::placeholder{ color:var(--mute); }
 
+  /* Display-only. Not an account, not verified, not a login — it exists so an
+     approved confession can be credited if the owner publishes it. */
+  .field--handle{
+    flex-direction:row;
+    align-items:baseline;
+    gap:0.6ch;
+    flex-wrap:wrap;
+  }
+
+  #handle{
+    flex:1 1 12ch;
+    min-width:0;
+    background:transparent;
+    border:0;
+    outline:0;
+    color:var(--bone);
+    font:inherit;
+    font-size:clamp(0.78rem, 2.1vw, 0.9rem);
+    caret-color:var(--phosphor);
+    padding:0.15rem 0;
+  }
+  #handle::placeholder{ color:var(--mute); }
+
+  /* Never name this element id="turnstile". An element id becomes a property
+     of window, so <div id="turnstile"> makes window.turnstile the div itself;
+     api.js finds it already set, logs "Turnstile already has been loaded" and
+     aborts without rendering — with a warning that names the wrong cause.
+     It must also stay GENUINELY visible: Turnstile refuses to build inside a
+     hidden, zero-size or zero-opacity container, so this only moves, scales
+     and dims it. Never display:none / visibility:hidden / opacity:0 here. */
+  #ts-widget{
+    position:fixed;
+    left:clamp(0.75rem, 2vw, 1.25rem);
+    bottom:clamp(0.75rem, 2vw, 1.25rem);
+    z-index:5;
+    width:300px;
+    height:65px;
+    transform:scale(0.8);
+    transform-origin:bottom left;
+    opacity:0.5;
+    transition:opacity 200ms ease;
+  }
+  /* full strength the moment it is deliberately looked at or interacted with */
+  #ts-widget:hover,
+  #ts-widget:focus-within{ opacity:1; }
+
+  /* On short/narrow screens the fixed badge would land on the centred footer,
+     so reserve a strip for it at the bottom of the page instead. */
+  @media (max-width:52rem){
+    body{ padding-bottom:5rem; }
+    #ts-widget{ transform:scale(0.7); }
+  }
+
   .controls{
     display:flex;
     align-items:center;
     justify-content:flex-start;
     gap:0.75rem;
     flex-wrap:wrap;
+  }
+
+  .gatemsg{
+    color:var(--phosphor);
+    font-size:clamp(0.7rem, 1.9vw, 0.8rem);
+    line-height:1.6;
+    max-width:46ch;
   }
 
   .btn{
@@ -311,10 +371,19 @@
                   placeholder="[ Describe the unacceptable behavior / incident / bug... ]"></textarea>
       </div>
 
+      <div class="field field--handle">
+        <label class="ps1" for="handle">--handle</label>
+        <input id="handle" type="text" maxlength="60" autocomplete="off"
+               autocapitalize="off" spellcheck="false"
+               placeholder="[ optional — discord / socials, so you get the credit ]">
+      </div>
+
       <div class="controls">
         <button id="void" class="btn" type="button">send to void</button>
         <button id="blog" class="btn" type="button">send to blog</button>
       </div>
+
+      <div id="gatemsg" class="gatemsg"></div>
 
       <output id="out" class="out" for="confession" aria-live="polite"></output>
     </section>
@@ -338,11 +407,49 @@
     <a class="by" href="https://noustelos.gr/" target="_blank" rel="noopener">A <span class="by__name">NOUSTELOS_STUDIO</span> PROJECT<span class="by__mark" aria-hidden="true">/&gt;</span></a>
   </footer>
 
+  <!-- Deliberately a direct child of <body>, NOT inside .terminal. An ancestor
+       with any transform other than none becomes the containing block for its
+       position:fixed descendants, and .terminal's `animation:rise ... forwards`
+       parks it on transform:translateY(0) permanently. Nested, this badge would
+       pin itself to the terminal's corner instead of the viewport's and land on
+       top of the output text. Keep it out here. -->
+  <div id="ts-widget" class="cf-turnstile"
+       data-theme="dark"
+       data-callback="onSuccess"
+       data-error-callback="onError"
+       data-expired-callback="onExpired"></div>
+
 <script>
+  /* ── THE HUMAN FILLS THIS IN ───────────────────────────────────────────
+     unacceptable.dev's OWN Turnstile sitekey — do NOT paste notso.dev's.
+     Public by design: the sitekey is 24 characters and safe in HTML. The
+     35-character SECRET never appears in this file; it lives only as a
+     Pages secret (TURNSTILE_SECRET_KEY). If what you paste here is 35
+     characters, you have the wrong one.
+     Local layout work: use Cloudflare's always-pass TEST sitekey — a real
+     key shows error 110200 (unknown domain) on localhost, which is expected
+     and not a bug.                                                        */
+  const TURNSTILE_SITE_KEY = "REPLACE_ME";
+
   const confession = document.getElementById("confession");
+  const handle     = document.getElementById("handle");
   const voidBtn    = document.getElementById("void");
   const blogBtn    = document.getElementById("blog");
   const out        = document.getElementById("out");
+  const slot       = document.getElementById("ts-widget");
+
+  const MAX_CHARS = 2000;   /* mirrors the cap the Function enforces */
+
+  let token   = "";     /* set by Turnstile's success callback, never polled */
+  let pending = null;   /* a confession sent before the challenge resolved   */
+  let busy    = false;
+  let waitTimer = null;
+
+  /* One source of truth for the sitekey: the constant above, written onto the
+     element here. This inline script runs during parsing; api.js is deferred
+     and therefore executes later, so the attribute is always in place before
+     Turnstile scans for .cf-turnstile containers. */
+  slot.dataset.sitekey = TURNSTILE_SITE_KEY;
 
   function print(text, cls){
     out.textContent = "";
@@ -375,10 +482,163 @@
     confession.focus();
   });
 
-  /* Wired in phase 2 — Turnstile + POST /api/confess. */
-  blogBtn.addEventListener("click", () => {
-    print("// The blog queue isn't plugged in yet. The void is open, though.", "err");
-  });
+  /* ---- BLOG path -------------------------------------------------------
+     The other button. This one leaves the browser, so it is gated: a solved
+     Turnstile, a length check, and the confession travels in the POST BODY —
+     never a URL param, where it would land in logs, history and referrers. */
+
+  function setBusy(state){
+    busy = state;
+    blogBtn.disabled = state;
+    voidBtn.disabled = state;
+    confession.disabled = state;
+    handle.disabled = state;
+  }
+
+  /* Writes to its OWN element, never into #ts-widget: a diagnostic that
+     empties the widget container destroys a working widget every time the
+     detection is wrong. */
+  function gateNote(msg){
+    const el = document.getElementById("gatemsg");
+    if (!el || el.dataset.noted) return;
+    el.dataset.noted = "1";
+    el.textContent = msg;
+  }
+
+  async function deliver(text, who){
+    setBusy(true);
+    print("filing your report with the only moderator we have...", "working");
+
+    try {
+      const res = await fetch("/api/confess", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        /* body, not query string */
+        body: JSON.stringify({ confession: text, handle: who, turnstileToken: token }),
+      });
+
+      const data = await res.json().catch(() => ({}));
+
+      if (!res.ok){
+        print(data.error || "// Something broke on our end. Not your fault. Try again.", "err");
+      } else {
+        confession.value = "";
+        print("// Filed. A human reads it next, then decides. No algorithm involved.");
+      }
+    } catch {
+      print("// Couldn't reach the server. The void still works offline, though.", "err");
+    } finally {
+      /* Turnstile tokens are single-use: without this the second submit 403s. */
+      token = "";
+      resetWidget();
+      setBusy(false);
+      confession.focus();
+    }
+  }
+
+  function sendToBlog(){
+    if (busy) return;
+
+    const text = confession.value.trim();
+    const who  = handle.value.trim();
+
+    if (!text){
+      print("// You have to actually report something. Empty is the void's job.", "err");
+      return;
+    }
+    if (text.length > MAX_CHARS){
+      print("// That's a manifesto, not a bug report. Trim it under " + MAX_CHARS + " characters.", "err");
+      return;
+    }
+
+    if (!token){
+      /* Challenge still in flight. Queue it and fire the moment the token
+         lands, rather than dead-ending and making them retype. */
+      pending = { text, who };
+      print("proving you're not a bot, which is ironic given the state of things...", "working");
+
+      clearTimeout(waitTimer);
+      waitTimer = setTimeout(() => {
+        if (!pending) return;
+        pending = null;
+        print(widgetUp()
+          ? "// The bot-check is still thinking. If there's a checkbox in the corner, tick it; otherwise reload."
+          : "// The bot-check never showed up. See the note above — the void doesn't need it.", "err");
+      }, 15000);
+      return;
+    }
+
+    deliver(text, who);
+  }
+
+  blogBtn.addEventListener("click", sendToBlog);
+
+  /* Implicit rendering: Turnstile builds the widget from the data-* attributes
+     and calls these globals. No render(), no ready(), no onload — none of the
+     initialisation orderings that break it can occur. */
+  window.onSuccess = function(t){
+    token = t;
+    clearTimeout(waitTimer);
+    if (pending && !busy){
+      const p = pending; pending = null; deliver(p.text, p.who);
+    }
+  };
+
+  window.onError = function(code){
+    token = ""; pending = null; setBusy(false);
+    console.error("turnstile error:", code);
+    gateNote("// Cloudflare turned our bouncer away (code " + code + "). That's our end, not your browser.");
+    return true;
+  };
+
+  window.onExpired = function(){ token = ""; resetWidget(); };
+
+  function resetWidget(){
+    token = "";
+    try {
+      if (window.turnstile && typeof window.turnstile.reset === "function"){
+        window.turnstile.reset("#ts-widget");
+      }
+    } catch (err) { console.error("turnstile reset failed:", err); }
+  }
+
+  /* A rendered widget puts an iframe in the slot. That, not a guess about
+     script state, is how we tell "up" from "never arrived". */
+  function widgetUp(){
+    return !!(slot && slot.childElementCount > 0);
+  }
+
+  /* Safety net if implicit rendering found nothing. Checks the METHOD, never
+     just the object — window.turnstile can exist while render() does not. */
+  setTimeout(() => {
+    if (widgetUp() || token) return;
+    if (!window.turnstile || typeof window.turnstile.render !== "function") return;
+    try {
+      slot.classList.remove("cf-turnstile");
+      window.turnstile.render("#ts-widget", {
+        sitekey: slot.dataset.sitekey,
+        theme: "dark",
+        callback: window.onSuccess,
+        "error-callback": window.onError,
+        "expired-callback": window.onExpired,
+      });
+    } catch (err) { console.error("fallback render threw:", err); }
+  }, 4000);
+
+  /* Ad blockers routinely block challenges.cloudflare.com — and this audience
+     runs them. Say so where the widget should have been, and point the joke at
+     the blocker, never at the person. */
+  setTimeout(() => {
+    if (token || widgetUp()) return;
+    gateNote(!window.turnstile
+      ? "// Your ad blocker just bounced our bot-check, so SEND TO BLOG is stuck. Allow challenges.cloudflare.com and reload — SEND TO VOID never needed it."
+      : "// Cloudflare refused the badge for this sitekey on " + location.hostname + ". That's our end, not your browser.");
+  }, 10000);
 </script>
+<!-- defer, NOT async: async executes the moment it downloads, which on this
+     page happens before the parser reaches #ts-widget (it sits behind a large
+     inline stylesheet). Turnstile scans for .cf-turnstile once on execution,
+     finds nothing, and never renders. defer guarantees a parsed DOM. -->
+<script src="https://challenges.cloudflare.com/turnstile/v0/api.js" defer></script>
 </body>
 </html>
