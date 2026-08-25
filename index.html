@@ -1,0 +1,384 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>unacceptable.dev</title>
+<meta name="description" content="unacceptable.dev — society is glitching. Report the bug.">
+<link rel="canonical" href="https://unacceptable.dev/">
+<meta name="color-scheme" content="dark">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<style>
+  /* Palette copied by hand from notso.dev, never imported — the two repos
+     share no code (CLAUDE.md, "Siloing"). Same tokens on purpose: one
+     universe, two halves. --phosphor is the correction in both; there it
+     paints "not", here it paints "un". */
+  :root{
+    --ink:      #0b0c0e;   /* background, cool near-black        */
+    --lift:     #14171c;   /* faint center lift                  */
+    --bone:     #ede8df;   /* acceptable.dev — warm, stable      */
+    --phosphor: #ff6b35;   /* the "un" — bright ember correction */
+    --mute:     #565a61;   /* utility text                       */
+    --rule:     #23262c;   /* hairlines                          */
+  }
+
+  *{ box-sizing:border-box; margin:0; padding:0; }
+
+  html{ height:100%; }
+
+  body{
+    min-height:100dvh;
+    background:
+      radial-gradient(120% 90% at 50% 34%, var(--lift) 0%, var(--ink) 62%);
+    background-attachment:fixed;
+    color:var(--bone);
+    font-family:"Space Mono", ui-monospace, "SFMono-Regular", Menlo, monospace;
+    display:grid;
+    grid-template-rows:1fr auto;
+    justify-items:center;
+    align-items:center;
+    padding:clamp(1.25rem, 4vw, 2.5rem);
+    -webkit-font-smoothing:antialiased;
+    text-rendering:optimizeLegibility;
+  }
+
+  /* ---- stage ------------------------------------------------------ */
+  .stage{
+    grid-row:1;
+    width:100%;
+    max-width:44rem;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:clamp(1rem, 3vw, 1.6rem);
+    text-align:center;
+    padding-block:clamp(1.5rem, 5vw, 3rem);
+  }
+
+  .hero{
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:clamp(1rem, 3vw, 1.6rem);
+    opacity:0;
+    animation:rise 900ms 120ms ease-out forwards;
+  }
+
+  .wordmark{
+    font-weight:700;
+    font-size:clamp(1.8rem, 7.6vw, 4rem);
+    line-height:1;
+    letter-spacing:-0.02em;
+    white-space:nowrap;
+  }
+
+  /* The "un" arrives in front of a word that is already settled, so it must
+     occupy its slot from the first frame — only opacity animates, never
+     display/width/position. Nothing reflows when it appears. */
+  .un{
+    display:inline-block;
+    color:var(--phosphor);
+    opacity:0;
+    animation:unin 900ms 1150ms ease-out forwards;
+  }
+  .acceptable{ color:var(--bone); }
+
+  /* The shell's negation operator, doing the same work as the prefix. Quiet
+     enough to read as punctuation until you notice it isn't. */
+  .bang{ color:var(--mute); }
+
+  .meta{
+    font-size:clamp(0.72rem, 2vw, 0.86rem);
+    letter-spacing:0.06em;
+    color:var(--mute);
+    opacity:0;
+    animation:rise 900ms 1500ms ease-out forwards;
+  }
+  .meta .cursor{
+    display:inline-block;
+    width:0.6ch;
+    color:var(--phosphor);
+    animation:blink 1.15s steps(1) 1600ms infinite;
+  }
+
+  /* ---- terminal --------------------------------------------------- */
+  .terminal{
+    width:100%;
+    text-align:left;
+    display:flex;
+    flex-direction:column;
+    gap:0.9rem;
+    opacity:0;
+    animation:rise 900ms 1700ms ease-out forwards;
+  }
+
+  .field{
+    display:flex;
+    flex-direction:column;
+    gap:0.5rem;
+    border-bottom:1px solid var(--rule);
+    padding-bottom:0.6rem;
+  }
+  .field:focus-within{ border-bottom-color:var(--phosphor); }
+
+  .ps1{
+    color:var(--phosphor);
+    font-size:clamp(0.78rem, 2.1vw, 0.92rem);
+    white-space:nowrap;
+    user-select:none;
+  }
+
+  #confession{
+    width:100%;
+    min-height:7.5rem;
+    resize:vertical;
+    background:transparent;
+    border:0;
+    outline:0;
+    color:var(--bone);
+    font:inherit;
+    font-size:clamp(0.82rem, 2.2vw, 0.95rem);
+    line-height:1.65;
+    caret-color:var(--phosphor);
+    padding:0.15rem 0;
+  }
+  #confession::placeholder{ color:var(--mute); }
+
+  .controls{
+    display:flex;
+    align-items:center;
+    justify-content:flex-start;
+    gap:0.75rem;
+    flex-wrap:wrap;
+  }
+
+  .btn{
+    background:transparent;
+    border:1px solid var(--rule);
+    color:var(--bone);
+    font:inherit;
+    font-size:clamp(0.72rem, 1.9vw, 0.82rem);
+    letter-spacing:0.06em;
+    padding:0.5rem 1.1rem;
+    cursor:pointer;
+    transition:border-color 160ms ease, color 160ms ease;
+  }
+  .btn:hover:not(:disabled),
+  .btn:focus-visible{ border-color:var(--phosphor); color:var(--phosphor); }
+  .btn:disabled{ opacity:0.4; cursor:not-allowed; }
+
+  .out{
+    display:block;
+    font-size:clamp(0.82rem, 2.2vw, 0.95rem);
+    line-height:1.65;
+    white-space:pre-wrap;
+    min-height:1.65em;
+  }
+  .out .line + .line{ margin-top:0.5rem; }
+  .out .punch{ color:var(--phosphor); }
+  .out .working{ color:var(--mute); }
+  .out .err{ color:var(--phosphor); }
+
+  /* ---- footer ----------------------------------------------------- */
+  .site-foot{
+    grid-row:2;
+    width:100%;
+    max-width:44rem;
+    display:flex;
+    flex-direction:column;
+    align-items:center;
+    gap:0.55rem;
+    text-align:center;
+    opacity:0;
+    animation:rise 900ms 1800ms ease-out forwards;
+    padding-bottom:clamp(0.5rem, 2vw, 1rem);
+  }
+
+  .foot-row{
+    display:flex;
+    align-items:baseline;
+    justify-content:center;
+    gap:0.6rem 1.25rem;
+    flex-wrap:wrap;
+  }
+
+  .tagline{
+    font-size:clamp(0.68rem, 1.8vw, 0.8rem);
+    letter-spacing:0.04em;
+    color:var(--mute);
+  }
+
+  /* mailto: hands off to a mail client — not an external page, so no
+     target/rel. Shown in full so it can still be copied when the browser
+     has no mail handler. */
+  .mailto{
+    font-size:clamp(0.68rem, 1.8vw, 0.8rem);
+    letter-spacing:0.04em;
+    color:var(--mute);
+    text-decoration:none;
+    border-bottom:1px solid transparent;
+    transition:color 160ms ease, border-color 160ms ease;
+  }
+  .mailto:hover,
+  .mailto:focus-visible{ color:var(--phosphor); border-bottom-color:var(--phosphor); }
+
+  /* The bridge to the other half. A plain hyperlink is the ONLY permitted
+     connection between the two sites — no fetch, no import, no shared key. */
+  .sibling{
+    font-size:clamp(0.68rem, 1.8vw, 0.8rem);
+    letter-spacing:0.04em;
+    color:var(--mute);
+    text-decoration:none;
+    border-bottom:1px solid transparent;
+    transition:color 160ms ease, border-color 160ms ease;
+  }
+  .sibling:hover,
+  .sibling:focus-visible{ color:var(--phosphor); border-bottom-color:var(--phosphor); }
+
+  /* ---- studio credit ----
+     Copied by hand from notso.dev, never imported: the projects share no
+     code. Same tokens, so it needs no re-tint. */
+  .by{
+    display:inline-block;
+    padding:0.35rem 0.25rem;
+    color:var(--rule);
+    font-size:clamp(0.6rem, 1.5vw, 0.68rem);
+    font-weight:700;
+    letter-spacing:0.09em;
+    line-height:1;
+    text-decoration:none;
+    white-space:nowrap;
+    transition:color 250ms ease;
+  }
+  .by:hover,
+  .by:focus-visible{ color:var(--mute); }
+  .by__name{ color:var(--mute); }
+  .by:hover .by__name,
+  .by:focus-visible .by__name{ color:var(--bone); }
+
+  /* the studio's mark, not punctuation */
+  .by__mark{
+    display:inline-block;
+    margin-left:0.18em;
+    font-size:0.74em;
+    letter-spacing:0.03em;
+    transform:translateY(-0.32em);
+  }
+
+  /* ---- motion ----------------------------------------------------- */
+  /* One-shot reveal for the "un", settling at a resting glow. notso proved a
+     continuous opacity loop on a large element reads as FLICKER at every
+     amplitude and speed — there is no looping animation on the wordmark here
+     and there must never be one. */
+  @keyframes unin{
+    from{ opacity:0; }
+    to  { opacity:0.66; text-shadow:0 0 22px rgba(217,119,87,0.22); }
+  }
+  @keyframes rise{
+    from{ opacity:0; transform:translateY(0.4rem); }
+    to  { opacity:1; transform:translateY(0); }
+  }
+  @keyframes blink{ 0%,49%{opacity:1;} 50%,100%{opacity:0;} }
+
+  /* Pixel-identical to the animated END state, minus the travel. Anyone who
+     set the OS preference gets a calm page from the first frame — never a
+     degraded one. */
+  @media (prefers-reduced-motion: reduce){
+    .hero,.meta,.terminal,.site-foot{ opacity:1; animation:none; transform:none; }
+    .un{ opacity:0.66; animation:none;
+         text-shadow:0 0 22px rgba(217,119,87,0.22); }
+    .meta .cursor{ animation:none; }
+    .btn,.mailto,.sibling,.by{ transition:none; }
+  }
+</style>
+</head>
+<body>
+  <main class="stage">
+    <div class="hero">
+      <h1 class="wordmark" aria-label="unacceptable.dev">
+        <span class="un">un</span><span class="acceptable">acceptable.dev</span> <span class="bang" aria-hidden="true">!</span>
+      </h1>
+      <p class="meta">// Society is glitching. Report the bug.<span class="cursor">_</span></p>
+    </div>
+
+    <section class="terminal">
+      <div class="field">
+        <label class="ps1" for="confession">guest@unacceptable:~$ report_bug</label>
+        <textarea id="confession" maxlength="2000" rows="5"
+                  autocomplete="off" autocapitalize="sentences" spellcheck="false"
+                  placeholder="[ Describe the unacceptable behavior / incident / bug... ]"></textarea>
+      </div>
+
+      <div class="controls">
+        <button id="void" class="btn" type="button">send to void</button>
+        <button id="blog" class="btn" type="button">send to blog</button>
+      </div>
+
+      <output id="out" class="out" for="confession" aria-live="polite"></output>
+    </section>
+  </main>
+
+  <footer class="site-foot">
+    <div class="foot-row">
+      <!--email_off--><a class="mailto" href="mailto:human@unacceptable.dev">human@unacceptable.dev</a><!--/email_off-->
+      <span class="tagline">society is glitching, every day.</span>
+    </div>
+
+    <div class="foot-row">
+      <!-- The only bridge between the two sites: a hyperlink a human clicks.
+           Never a fetch, never a shared token. -->
+      <a class="sibling" href="https://notso.dev/" target="_blank" rel="noopener">the other half &rarr; notso.dev</a>
+    </div>
+
+    <!-- rel is "noopener" only, deliberately: noreferrer would hide that the
+         traffic came from here, and attribution is the whole point. The "/>"
+         is decorative, so it stays out of the accessible name. -->
+    <a class="by" href="https://noustelos.gr/" target="_blank" rel="noopener">A <span class="by__name">NOUSTELOS_STUDIO</span> PROJECT<span class="by__mark" aria-hidden="true">/&gt;</span></a>
+  </footer>
+
+<script>
+  const confession = document.getElementById("confession");
+  const voidBtn    = document.getElementById("void");
+  const blogBtn    = document.getElementById("blog");
+  const out        = document.getElementById("out");
+
+  function print(text, cls){
+    out.textContent = "";
+    const frag = document.createDocumentFragment();
+    for (const raw of String(text).split("\n")){
+      const line = raw.trim();
+      if (!line) continue;
+      const div = document.createElement("div");
+      /* a // line is the punchline — it gets the ember treatment */
+      div.className = "line " + (cls || (line.startsWith("//") ? "punch" : ""));
+      div.textContent = line;
+      frag.appendChild(div);
+    }
+    out.appendChild(frag);
+  }
+
+  /* VOID — the whole point is that nothing leaves the browser. No fetch, no
+     beacon, no analytics event, not even a length. The text is dropped on the
+     floor here and there is nowhere else it could have gone. Anything added
+     to this function that touches the network breaks the promise the button
+     makes, so: keep it empty of I/O. */
+  voidBtn.addEventListener("click", () => {
+    const text = confession.value.trim();
+    if (!text){
+      print("// The void takes anything, but it needs something. Type first.", "err");
+      return;
+    }
+    confession.value = "";
+    print("// Error logged successfully. You are now clean.");
+    confession.focus();
+  });
+
+  /* Wired in phase 2 — Turnstile + POST /api/confess. */
+  blogBtn.addEventListener("click", () => {
+    print("// The blog queue isn't plugged in yet. The void is open, though.", "err");
+  });
+</script>
+</body>
+</html>
