@@ -23,7 +23,7 @@ Read in 3 seconds or it failed.
 | **notso.dev** | OUTPUT — the feed + Uncle Dev bot |
 
 ## The confession terminal — spec
-- **Intro (minimal, one-shot):** `acceptable.dev !` settles, then the `un` prefix fades in front → `unacceptable.dev !`. This mirrors notso's `not` prefix.
+- **Intro (minimal, one-shot):** `acceptable.dev` settles, then the `un` prefix fades in front → `unacceptable.dev`. This mirrors notso's `not` prefix. The wordmark is ONE word, no trailing punctuation — a space or a `!` makes one domain read as two things.
   - **One-shot fade to a resting state. NO looping/breathing pulse.** (notso proved a continuous opacity loop on a large element reads as *flicker* at every amplitude/speed — it was cut for a one-shot fade to a resting opacity. Do the same here.)
   - Skippable; the `prefers-reduced-motion` state is pixel-identical to the animated end state, minus the fade.
 - **Hero line:** `// Society is glitching. Report the bug.`
@@ -47,6 +47,7 @@ Read in 3 seconds or it failed.
 Honour the real OS `prefers-reduced-motion` silently and correctly. Calm from the first frame for anyone who set it. No effect ever overrides a real accessibility preference.
 
 ## Gotchas (hard-won — respect them)
+- **One blinking `_` per page, only on the line that takes typing.** A blinking caret is an *affordance* — it says "write here". On a tagline, title, punchline or footer it makes people click there and miss the real box (notso.dev did exactly that; fixed 2026-08-26). Here it lives at the end of the confession prompt label (`guest@unacceptable:~$ confess_`) and nowhere else. Three load-bearing details: it **hides on `:focus-within`** (the browser draws its own caret — two carets on one field is worse than none), its blink **delay starts after the container's reveal finishes** (else it blinks inside an invisible element), and the span is **`aria-hidden`** so the `_` stays out of the label's accessible name. Under `prefers-reduced-motion` it stays **visible but still** (`animation:none`, never `display:none`) — it is a signal, not an effect.
 - **Turnstile: `defer`, never `async`.** With `async`, `api.js` runs mid-parse before the container exists and never re-scans.
 - **Never give an element `id="turnstile"`.** An element id becomes `window.<id>`, so `<div id="turnstile">` overwrites `window.turnstile` and the widget silently dies with a misleading "already loaded" warning. Use `#ts-widget`.
 - **Turnstile tokens are single-use.** Reset the widget after any submit that consumes one, or a second attempt 403s.

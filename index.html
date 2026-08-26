@@ -85,22 +85,12 @@
   }
   .acceptable{ color:var(--bone); }
 
-  /* The shell's negation operator, doing the same work as the prefix. Quiet
-     enough to read as punctuation until you notice it isn't. */
-  .bang{ color:var(--mute); }
-
   .meta{
     font-size:clamp(0.72rem, 2vw, 0.86rem);
     letter-spacing:0.06em;
     color:var(--mute);
     opacity:0;
     animation:rise 900ms 1500ms ease-out forwards;
-  }
-  .meta .cursor{
-    display:inline-block;
-    width:0.6ch;
-    color:var(--phosphor);
-    animation:blink 1.15s steps(1) 1600ms infinite;
   }
 
   /* ---- terminal --------------------------------------------------- */
@@ -129,6 +119,23 @@
     white-space:nowrap;
     user-select:none;
   }
+
+  /* THE ONE CARET ON THE PAGE. A blinking _ is an affordance: it says "type
+     here". Put it on a tagline, a title, a punchline or a footer and people
+     click THAT and never find the real box — which is exactly what happened on
+     notso.dev and was fixed 2026-08-26. It lives on the prompt label of the
+     confession field and nowhere else. Do not add a decorative second one.
+     The delay must start AFTER .terminal's reveal ends (900ms + 1700ms), or it
+     blinks inside a still-invisible element. */
+  .ps1 .cursor{
+    display:inline-block;
+    width:0.6ch;
+    animation:blink 1.15s steps(1) 2800ms infinite;
+  }
+
+  /* Once focused, the browser paints its own caret in the textarea. Two
+     cursors on one field is worse than none, so ours gets out of the way. */
+  .field:focus-within .ps1 .cursor{ animation:none; opacity:0; }
 
   #confession{
     width:100%;
@@ -349,7 +356,9 @@
     .hero,.meta,.terminal,.site-foot{ opacity:1; animation:none; transform:none; }
     .un{ opacity:0.66; animation:none;
          text-shadow:0 0 22px rgba(217,119,87,0.22); }
-    .meta .cursor{ animation:none; }
+    /* still, not gone: the caret is a signal ("type here"), not decoration.
+       Reduced motion removes the blink, never the mark. */
+    .ps1 .cursor{ animation:none; opacity:1; }
     .btn,.mailto,.sibling,.by{ transition:none; }
   }
 </style>
@@ -358,14 +367,14 @@
   <main class="stage">
     <div class="hero">
       <h1 class="wordmark" aria-label="unacceptable.dev">
-        <span class="un">un</span><span class="acceptable">acceptable.dev</span> <span class="bang" aria-hidden="true">!</span>
+        <span class="un">un</span><span class="acceptable">acceptable.dev</span>
       </h1>
-      <p class="meta">// Society is glitching. Report the bug.<span class="cursor">_</span></p>
+      <p class="meta">// Society is glitching. Report the bug.</p>
     </div>
 
     <section class="terminal">
       <div class="field">
-        <label class="ps1" for="confession">guest@unacceptable:~$ report_bug</label>
+        <label class="ps1" for="confession">guest@unacceptable:~$ confess<span class="cursor" aria-hidden="true">_</span></label>
         <textarea id="confession" maxlength="2000" rows="5"
                   autocomplete="off" autocapitalize="sentences" spellcheck="false"
                   placeholder="[ Describe the unacceptable behavior / incident / bug... ]"></textarea>
